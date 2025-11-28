@@ -83,11 +83,17 @@ def get_weather_data(latitude, longitude, timestamp):
     if not hourly:
         return None
 
+    def safe_get(arr, idx):
+        """Safely get value from array, returning None if index out of bounds."""
+        if arr and 0 <= idx < len(arr):
+            return arr[idx]
+        return None
+
     return {
-        "temperature": hourly.get("temperature_2m", [None] * 24)[hour],
-        "humidity": hourly.get("relative_humidity_2m", [None] * 24)[hour],
-        "wind_speed": hourly.get("wind_speed_10m", [None] * 24)[hour],
-        "weather_code": hourly.get("weather_code", [None] * 24)[hour],
+        "temperature": safe_get(hourly.get("temperature_2m"), hour),
+        "humidity": safe_get(hourly.get("relative_humidity_2m"), hour),
+        "wind_speed": safe_get(hourly.get("wind_speed_10m"), hour),
+        "weather_code": safe_get(hourly.get("weather_code"), hour),
     }
 
 
@@ -162,7 +168,7 @@ def update_activity_description(access_token, activity_id, weather_string, exist
     response = requests.put(
         f"https://www.strava.com/api/v3/activities/{activity_id}",
         headers=headers,
-        data={"description": new_description},
+        json={"description": new_description},
         timeout=30,
     )
     response.raise_for_status()
@@ -184,7 +190,11 @@ def main():
     # Refresh the access token
     print("Refreshing Strava access token...")
     token_data = refresh_strava_token(client_id, client_secret, refresh_token)
-    access_token = token_data["access_token"]
+    access_token = token_data.get("access_token")
+    if not access_token:
+        print("Error: Failed to get access token from refresh response.")
+        print(f"Response: {token_data}")
+        sys.exit(1)
     print("Token refreshed successfully.")
 
     # Get recent activities
