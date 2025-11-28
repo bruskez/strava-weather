@@ -23,11 +23,17 @@ def get_strava_access_token():
         "grant_type": "refresh_token",
         "refresh_token": STRAVA_REFRESH_TOKEN,
     }
-    print("[INFO] Richiedo access token Strava...")
+    print("[INFO] Requesting Strava access token...")
     r = requests.post(url, data=data)
-    r.raise_for_status()
-    j = r.json()
-    return j["access_token"]
+    if r.status_code != 200:
+        # Print status and Strava error payload for diagnosis (does not reveal our secrets)
+        print(f"[ERROR] Strava token request failed: {r.status_code}")
+        try:
+            print("[ERROR] Strava response:", r.json())
+        except Exception:
+            print("[ERROR] Strava response text:", r.text)
+        r.raise_for_status()
+    return r.json()["access_token"]
 
 
 def get_recent_activities(token, max_activities=MAX_ACTIVITIES):
