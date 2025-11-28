@@ -1,5 +1,6 @@
 import os
 import requests
+import time
 
 # ==========================
 # CONFIGURAZIONE - da ENV
@@ -11,7 +12,7 @@ STRAVA_REFRESH_TOKEN = os.getenv("STRAVA_REFRESH_TOKEN")
 VC_API_KEY = os.getenv("VC_API_KEY")
 
 # quante attività controllare ad ogni run
-MAX_ACTIVITIES = 10000
+MAX_ACTIVITIES = 40
 METEO_TAG = "Meteo"
 
 
@@ -168,6 +169,7 @@ def main():
         try:
             update_strava_activity_description(token, act_id, new_desc)
             print("   ✔ Descrizione aggiornata.")
+            time.sleep(3)
         except Exception as e:
             print(f"   Errore aggiornando Strava: {e}")
 
