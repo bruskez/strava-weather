@@ -1,6 +1,7 @@
 import os
 import requests
 import time
+from datetime import datetime, timedelta
 
 # ==========================
 # CONFIGURAZIONE - da ENV
@@ -13,6 +14,10 @@ VC_API_KEY = os.getenv("VC_API_KEY")
 
 # quante attività controllare ad ogni run
 MAX_ACTIVITIES = 40
+
+# quanti giorni indietro vuoi controllare
+DAYS_BACK = 3 
+
 METEO_TAG = "Meteo"
 
 
@@ -27,7 +32,7 @@ def get_strava_access_token():
     print("[INFO] Requesting Strava access token...")
     r = requests.post(url, data=data)
     if r.status_code != 200:
-        # Print status and Strava error payload for diagnosis (does not reveal our secrets)
+        # Print status and Strava error payload for diagnosis
         print(f"[ERROR] Strava token request failed: {r.status_code}")
         try:
             print("[ERROR] Strava response:", r.json())
@@ -61,7 +66,6 @@ def get_recent_activities(token, max_activities=MAX_ACTIVITIES):
 
     print(f"[INFO] Totale attività scaricate: {len(activities)}")
     return activities
-
 
 
 def get_weather_for_activity(lat, lon, date_str):
@@ -131,14 +135,33 @@ def main():
 
     print(f"[INFO] Attività trovate: {len(activities)}")
 
+    # Calcolo data di cutoff (non processiamo attività più vecchie di DAYS_BACK)
+    cutoff_date = datetime.now() - timedelta(days=DAYS_BACK)
+    cutoff_str = cutoff_date.date().isoformat()
+    print(f"[INFO] Considero solo attività da {cutoff_str} in poi")
+
     for act in activities:
         act_id = act.get("id")
         name = act.get("name")
         desc = act.get("description") or ""
         start_latlng = act.get("start_latlng")
-        start_date_local = act.get("start_date_local")
+        start_date_local = act.get("start_date_local")  # es. 'YYYY-MM-DDTHH:MM:SSZ'
+
+        if not start_date_local:
+            print(f"\n→ Attività {act_id}: {name}")
+            print("   Nessuna data, salto.")
+            continue
+
+        act_date_str = start_date_local.split("T")[0]  # "YYYY-MM-DD"
+
+        # filtro per data: salto se l'attività è più vecchia della finestra DAYS_BACK
+        if act_date_str < cutoff_str:
+            print(f"\n→ Attività {act_id}: {name}")
+            print(f"   Data {act_date_str} < cutoff {cutoff_str}, salto (vecchia).")
+            continue
 
         print(f"\n→ Attività {act_id}: {name}")
+        print(f"   Data: {act_date_str}")
 
         # se non c'è GPS (indoor) salto
         if not start_latlng or len(start_latlng) < 2:
@@ -151,9 +174,9 @@ def main():
             continue
 
         lat, lon = start_latlng[0], start_latlng[1]
-        date_str = start_date_local.split("T")[0]  # "YYYY-MM-DD"
+        date_str = act_date_str  # già "YYYY-MM-DD"
 
-        print(f"   Data: {date_str}  |  Posizione: {lat},{lon}")
+        print(f"   Posizione: {lat},{lon}")
 
         try:
             temp, feels, wind, cond = get_weather_for_activity(lat, lon, date_str)
