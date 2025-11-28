@@ -16,7 +16,7 @@ VC_API_KEY = os.getenv("VC_API_KEY")
 MAX_ACTIVITIES = 40
 
 # quanti giorni indietro vuoi controllare
-DAYS_BACK = 3 
+DAYS_BACK = 3
 
 METEO_TAG = "Meteo"
 
@@ -32,18 +32,20 @@ def get_strava_access_token():
     print("[INFO] Requesting Strava access token...")
     r = requests.post(url, data=data)
     if r.status_code != 200:
-        # Print status and Strava error payload for diagnosis
-        print(f"[ERROR] Strava token request failed: {r.status_code}")
+        # Messaggio di errore generico, senza dettagli sensibili
+        print(f"[ERROR] Strava token request failed with status code: {r.status_code}")
         try:
-            print("[ERROR] Strava response:", r.json())
+            err = r.json()
+            msg = err.get("message") or "No message"
+            print(f"[ERROR] Strava error message: {msg}")
         except Exception:
-            print("[ERROR] Strava response text:", r.text)
+            print("[ERROR] Strava returned a non-JSON error.")
         r.raise_for_status()
     return r.json()["access_token"]
 
 
 def get_recent_activities(token, max_activities=MAX_ACTIVITIES):
-    print(f"[INFO] Scarico fino a {max_activities} attività (tutto lo storico)...")
+    print(f"[INFO] Scarico fino a {max_activities} attività...")
     url = "https://www.strava.com/api/v3/athlete/activities"
     headers = {"Authorization": f"Bearer {token}"}
     activities = []
@@ -138,30 +140,26 @@ def main():
     # Calcolo data di cutoff (non processiamo attività più vecchie di DAYS_BACK)
     cutoff_date = datetime.now() - timedelta(days=DAYS_BACK)
     cutoff_str = cutoff_date.date().isoformat()
-    print(f"[INFO] Considero solo attività da {cutoff_str} in poi")
+    print(f"[INFO] Considero solo attività degli ultimi {DAYS_BACK} giorni")
 
     for act in activities:
         act_id = act.get("id")
-        name = act.get("name")
         desc = act.get("description") or ""
         start_latlng = act.get("start_latlng")
         start_date_local = act.get("start_date_local")  # es. 'YYYY-MM-DDTHH:MM:SSZ'
 
         if not start_date_local:
-            print(f"\n→ Attività {act_id}: {name}")
-            print("   Nessuna data, salto.")
+            print(f"\n→ Attività ID {act_id}: nessuna data, salto.")
             continue
 
         act_date_str = start_date_local.split("T")[0]  # "YYYY-MM-DD"
 
         # filtro per data: salto se l'attività è più vecchia della finestra DAYS_BACK
         if act_date_str < cutoff_str:
-            print(f"\n→ Attività {act_id}: {name}")
-            print(f"   Data {act_date_str} < cutoff {cutoff_str}, salto (vecchia).")
+            print(f"\n→ Attività ID {act_id}: troppo vecchia rispetto alla finestra, salto.")
             continue
 
-        print(f"\n→ Attività {act_id}: {name}")
-        print(f"   Data: {act_date_str}")
+        print(f"\n→ Elaboro attività ID {act_id}")
 
         # se non c'è GPS (indoor) salto
         if not start_latlng or len(start_latlng) < 2:
@@ -176,15 +174,16 @@ def main():
         lat, lon = start_latlng[0], start_latlng[1]
         date_str = act_date_str  # già "YYYY-MM-DD"
 
-        print(f"   Posizione: {lat},{lon}")
+        # Non logghiamo le coordinate né la data specifica
+        print("   Posizione: GPS OK (coordinate non loggate)")
 
         try:
             temp, feels, wind, cond = get_weather_for_activity(lat, lon, date_str)
-        except Exception as e:
-            print(f"   Errore meteo: {e}")
+        except Exception:
+            print("   Errore meteo durante la richiesta, salto.")
             continue
 
-        print(f"   Meteo: temp={temp}, feels={feels}, wind={wind}, cond={cond}")
+        print("   Meteo recuperato con successo.")
 
         weather_block = build_weather_block(temp, feels, wind, cond)
         new_desc = desc + weather_block
@@ -193,8 +192,8 @@ def main():
             update_strava_activity_description(token, act_id, new_desc)
             print("   ✔ Descrizione aggiornata.")
             time.sleep(3)
-        except Exception as e:
-            print(f"   Errore aggiornando Strava: {e}")
+        except Exception:
+            print("   Errore aggiornando Strava, salto.")
 
 
 if __name__ == "__main__":
