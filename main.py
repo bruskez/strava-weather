@@ -11,8 +11,8 @@ STRAVA_REFRESH_TOKEN = os.getenv("STRAVA_REFRESH_TOKEN")
 VC_API_KEY = os.getenv("VC_API_KEY")
 
 # quante attività controllare ad ogni run
-MAX_ACTIVITIES = 50
-METEO_TAG = "Meteo (auto GitHub)"
+MAX_ACTIVITIES = 10000
+METEO_TAG = "Meteo"
 
 
 def get_strava_access_token():
@@ -37,23 +37,30 @@ def get_strava_access_token():
 
 
 def get_recent_activities(token, max_activities=MAX_ACTIVITIES):
-    print(f"[INFO] Scarico fino a {max_activities} attività...")
+    print(f"[INFO] Scarico fino a {max_activities} attività (tutto lo storico)...")
     url = "https://www.strava.com/api/v3/athlete/activities"
     headers = {"Authorization": f"Bearer {token}"}
     activities = []
     page = 1
 
-    while len(activities) < max_activities:
-        params = {"per_page": 50, "page": page}
+    while True:
+        params = {"per_page": 200, "page": page}
         r = requests.get(url, headers=headers, params=params)
         r.raise_for_status()
         batch = r.json()
+
         if not batch:
             break
+
         activities.extend(batch)
         page += 1
 
-    return activities[:max_activities]
+        if len(activities) >= max_activities:
+            break
+
+    print(f"[INFO] Totale attività scaricate: {len(activities)}")
+    return activities
+
 
 
 def get_weather_for_activity(lat, lon, date_str):
@@ -92,7 +99,6 @@ def build_weather_block(temp, feels, wind, cond):
         lines.append(f"💨 Vento: {wind} km/h")
     if cond:
         lines.append(f"☁️ Condizioni: {cond}")
-    lines.append("🔄 Fonte: Visual Crossing")
     return "\n".join(lines)
 
 
