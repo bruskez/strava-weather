@@ -50,22 +50,30 @@ def get_recent_activities(token, max_activities=MAX_ACTIVITIES):
     headers = {"Authorization": f"Bearer {token}"}
     activities = []
     page = 1
+    retries = 3
 
     while True:
         params = {"per_page": 200, "page": page}
-        r = requests.get(url, headers=headers, params=params)
-        r.raise_for_status()
+        for attempt in range(retries):
+            try:
+                r = requests.get(url, headers=headers, params=params, timeout=10)
+                r.raise_for_status()
+                break
+            except requests.exceptions.HTTPError as e:
+                if r.status_code >= 500:
+                    print(f"[WARN] Server error (status {r.status_code}), retrying ({attempt + 1}/{retries})...")
+                    time.sleep(2 ** attempt)
+                    continue
+                else:
+                    print(f"[ERROR] {e}")
+                    raise  # Non-retryable error
         batch = r.json()
-
         if not batch:
             break
-
         activities.extend(batch)
         page += 1
-
         if len(activities) >= max_activities:
             break
-
     print(f"[INFO] Totale attività scaricate: {len(activities)}")
     return activities
 
